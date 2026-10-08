@@ -1,0 +1,5 @@
+# 가상 값 예시입니다. 실제 값을 이 저장소에 커밋하지 마세요.
+# 실제 파일(.env.local 등)은 .gitignore 대상이어야 합니다.
+GOOGLE_CLIENT_ID=<콘솔에서 발급된 클라이언트 ID>
+GOOGLE_CLIENT_SECRET=<콘솔에서 발급된 Secret - 출력/커밋 금지>
+ADMIN_EMAILS=you@example.com,teammate@example.com

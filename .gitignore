@@ -1,0 +1,11 @@
+# 비밀과 로컬 산출물은 절대 커밋하지 않는다
+.env
+.env.*
+!.env.example
+*.secrets
+secrets.*
+.kamal/secrets*
+client_secret*.json
+*.pem
+tmp/
+.DS_Store
