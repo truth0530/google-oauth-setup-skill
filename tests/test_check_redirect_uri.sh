@@ -39,8 +39,15 @@ expect "구형 ServiceLogin 경로" 0 OK_LOGIN_REDIRECT \
 expect "Location 에 redirect_uri_mismatch 문구" 1 MISMATCH \
   'HTTP/2 302\r\nlocation: https://accounts.google.com/signin/oauth/error?authError=redirect_uri_mismatch\r\n\r\n' ''
 
+# 실측: 존재하지 않는(형식만 유효한) client_id 도 미등록 URI 와 같은 오류 화면 경로 -> 구분 불가
+printf '%b' 'HTTP/2 302\r\nlocation: https://accounts.google.com/signin/oauth/error?authError=x\r\n\r\n' > "$T/h"; : > "$T/b"
+out="$("$SCRIPT" --classify "$T/h" "$T/b")"; got=$?
+if [[ $got -eq 1 && "$out" == *"RESULT=REJECTED"* && "$out" == *"구분 불가"* && "$out" == *"존재하지 않는 client_id"* ]]; then
+  pass=$((pass+1)); echo "ok   - 실측: 존재하지 않는 client_id 와 미등록 URI 는 구분 불가임을 안내"
+else failn=$((failn+1)); echo "FAIL - 구분 불가 안내 누락"; echo "$out" | sed 's/^/       /'; fi
+
 # --- 미확인 응답은 UNKNOWN (추측하지 않는다) ---
-expect "미확인: 존재하지 않는 client_id 응답 형태를 모르는 404" 3 UNKNOWN \
+expect "미확인: 알 수 없는 404 응답" 3 UNKNOWN \
   'HTTP/2 404\r\n\r\n' 'Not Found'
 expect "미확인: 낯선 Location" 3 UNKNOWN \
   'HTTP/2 302\r\nlocation: https://example.com/somewhere\r\n\r\n' ''

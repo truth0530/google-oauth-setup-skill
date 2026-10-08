@@ -23,7 +23,7 @@ scripts/check_redirect_uri.sh --lint-only --redirect-uri 'https://app.example.co
 scripts/check_redirect_uri.sh --client-id "$GOOGLE_CLIENT_ID_VALUE" --redirect-uri 'https://app.example.com/auth/google_oauth2/callback'
 ```
 
-등록된 URI 이면 구글 로그인 화면으로, 등록되지 않은 URI 이면 오류 화면으로 보냅니다(1회 실측, 판정은 Location 경로 기준):
+등록된 URI 이면 구글 로그인 화면으로, 등록되지 않은 URI 또는 존재하지 않는 client_id 이면 같은 오류 화면으로 보냅니다(1회 실측, 판정은 Location 경로 기준, 두 경우는 응답만으로 구분되지 않음):
 
 ```
 == 형식 점검 ==

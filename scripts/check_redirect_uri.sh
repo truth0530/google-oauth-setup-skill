@@ -14,8 +14,10 @@
 #   - 등록되지 않은 redirect_uri  -> HTTP 302, Location 경로가 /signin/oauth/error 계열(오류 화면)
 # 그래서 1순위 판정은 400 본문이 아니라 Location 헤더 경로다. 본문/헤더 문구(redirect_uri_mismatch 등)
 # 기반 판정은 보조이며, 본문이 비어 있어도 동작한다.
-# 미확인: 존재하지 않는 client_id, 삭제된 클라이언트, 동의 화면 상태 불량 등의 응답 형태.
-#        이 경우 오류 화면으로 가더라도 원인을 이 응답만으로 단정하지 않는다(REJECTED 는 '거부됨'까지만 뜻한다).
+#   - 존재하지 않는(형식만 유효한) client_id -> 미등록 URI 와 같은 오류 화면 경로로 302 (실측, 1회).
+#     따라서 잘못된 client_id 와 미등록 redirect_uri 는 이 응답만으로 구분할 수 없다.
+#     REJECTED 는 '거부됨'까지만 뜻하며, 원인은 client_id 와 URI 를 각각 콘솔 값과 대조해서 가려야 한다.
+# 미확인: 삭제된 클라이언트, 동의 화면 상태 불량 등의 응답 형태(UNKNOWN 으로 분류될 수 있다).
 # 구글이 응답 방식을 바꾸면 틀릴 수 있다(README 의 '검증 상태' 참조).
 
 set -u
@@ -110,8 +112,8 @@ classify() {
     if [[ "$loc" == *accounts.google.com/signin/oauth/error* || "$loc" == */signin/oauth/error* ]]; then
       echo "RESULT=REJECTED"
       echo "구글이 이 client_id 와 redirect_uri 조합을 거부하고 오류 화면으로 보냅니다."
-      echo "관찰된 원인: 등록되지 않은 redirect_uri(말단 슬래시 추가, 다른 경로). 다른 원인(잘못된 client_id 등)도 같은 응답일 수 있으나 확인되지 않았습니다."
-      echo "URI 를 글자 단위로 비교하고, client_id 가 이 프로젝트의 것인지 확인하세요."
+      echo "원인 후보 두 가지는 응답만으로 구분할 수 없습니다(구분 불가, 실측): (1) 등록되지 않은 redirect_uri(말단 슬래시 추가, 다른 경로), (2) 존재하지 않는 client_id."
+      echo "확인 방법: URI 를 콘솔 값과 글자 단위로 비교하고, client_id 가 이 프로젝트 클라이언트 상세의 값과 같은지 대조하세요."
       return 1
     fi
     # (2-b) 로그인 화면으로 보내는 경우

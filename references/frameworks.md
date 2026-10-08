@@ -1,6 +1,6 @@
 # 프레임워크별 콜백 경로 기본값
 
-아래는 각 라이브러리가 **흔히 쓰는 기본 경로**다. 프로젝트 설정(prefix, basePath, 커스텀 라우트)에 따라 달라지므로 **반드시 코드/설정에서 실제 값을 확인**하고, 콘솔에는 그 값과 글자 그대로 같은 URL을 등록한다. 이 표는 직접 검증한 것이 아니라 일반적인 문서 기준이다(확인 필요).
+아래는 각 라이브러리가 **흔히 쓰는 기본 경로**다. 프로젝트 설정(prefix, basePath, 커스텀 라우트)에 따라 달라지므로 **반드시 코드/설정에서 실제 값을 확인**하고, 콘솔에는 그 값과 글자 그대로 같은 URL을 등록한다. 이 표의 Rails 행(하위 경로 배포 포함)만 실제 앱으로 확인했고, 나머지 행은 직접 검증하지 않은 일반적인 문서 기준이다(확인 필요).
 
 | 프레임워크 / 라이브러리 | 기본 콜백 경로 | 비고 |
 |---|---|---|
@@ -26,7 +26,7 @@
 
 리버스 프록시 뒤에서는 앱이 자신의 스킴을 `http`로 오해해 `redirect_uri`를 `http://...`로 만드는 경우가 흔하다. 앱이 신뢰하는 프록시 헤더(`X-Forwarded-Proto`)나 "SSL 가정" 설정을 확인한다.
 
-## Rails + omniauth 상세 (1회 실측 + 라이브러리 문서)
+## Rails + omniauth 상세 (1회 실측)
 
 `omniauth-google-oauth2` 와 `omniauth-rails_csrf_protection` 을 함께 쓰는 구성에서 확인한 내용이다.
 
@@ -35,8 +35,9 @@
 - 앱을 하위 경로(예: `/app`) 아래에서 서비스할 때, 시작 경로(`/app/auth/google_oauth2`)와 콜백 경로(`/app/auth/google_oauth2/callback`)에 모두 접두사가 붙게 `path_prefix`(및 필요하면 `callback_path`)를 맞추면 구글로 보내는 `redirect_uri` 가 접두사를 포함한 콜백 전체 URL 이 되고, 그 값을 콘솔에 등록하면 구글이 로그인 화면으로 받아들인다.
 - 로그인 버튼이 사용하는 시작 경로도 같은 설정값에서 만들면 불일치를 피할 수 있다(하드코딩 금지).
 
-라이브러리 문서 기준이며 이번에 직접 시도하지 않은 것(미확인):
-- `omniauth-rails_csrf_protection` 을 쓰면 GET 으로 시작하는 링크(`link_to`)는 실패하거나 거부된다. 버튼은 `button_to ..., method: :post` 로 만든다.
-- `OmniAuth.config.allowed_request_methods` 를 POST 만 허용하도록 두는 구성이 권장된다.
+- 시작 경로로 **GET** 을 보내면 404(라우트 없음)였다. 토큰 없이 POST 하면 422, 토큰이 있는 POST 만 구글로 302 였다 (실제 앱에 curl 로 각각 요청, 1회). `omniauth-rails_csrf_protection` 과 POST 만 허용하는 설정을 함께 쓴 구성에서의 결과다.
+
+라이브러리 문서 기준이며 이번에 직접 확인하지 않은 것(미확인):
+- GET 이 404 가 되는 정확한 이유가 CSRF 젬 때문인지 `allowed_request_methods` 설정 때문인지는 구분하지 못했다. 버튼은 `button_to ..., method: :post` 로 만든다.
 
 점검: `scripts/check_app_login_start.sh` 가 이 흐름(쿠키+토큰 획득 -> POST -> 302 -> redirect_uri 비교)을 자동으로 확인한다.

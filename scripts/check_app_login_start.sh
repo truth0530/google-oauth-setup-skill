@@ -14,8 +14,10 @@
 # 비밀(Secret)은 필요 없다. client_id 값은 출력하지 않고 존재/형식 여부만 표시한다.
 # 종료 코드: 0 = 정상, 1 = 문제 발견, 2 = 사용법 오류, 3 = 판정 불가(네트워크 등)
 #
-# 근거: 서버 렌더링 앱에서 로그인 시작이 POST + CSRF 토큰인 구성(Rails + omniauth 계열)을 1회 실측한
-# 흐름이다. 다른 프레임워크는 토큰 필드 이름이나 시작 방식이 다를 수 있다(--token-field, --no-csrf).
+# 근거: 서버 렌더링 앱에서 로그인 시작이 POST + CSRF 토큰인 구성(Rails + omniauth 계열)을 실측했다.
+#   - 시작 경로로 GET 하면 404(라우트 없음), 토큰 없는 POST 는 422, 토큰이 있는 POST 만 302 로 구글에 간다.
+#   - 이 스크립트는 실제 Rails 앱에 대해 OK_APP_LOGIN_START 가 나오는 것을 1회 확인했다.
+# 다른 프레임워크는 토큰 필드 이름이나 시작 방식이 다를 수 있다(--token-field, --no-csrf).
 # 시험은 모의 curl(CURL_BIN)로만 하며 이 스크립트의 실제 구글 호출은 시험에서 하지 않는다.
 
 set -u
@@ -31,7 +33,7 @@ ID_SUFFIX_A="apps"
 ID_SUFFIX_B="googleusercontent.com"
 
 usage_app() {
-  sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 url_decode() {
@@ -124,7 +126,7 @@ main() {
   case "$st2" in
     302|303|307) echo "HTTP ${st2}" ;;
     422|403) echo "RESULT=FAIL_CSRF_REJECTED"; echo "앱이 HTTP ${st2} 로 거부했습니다. CSRF 토큰/세션 쿠키 처리를 확인하세요."; return 1 ;;
-    404) echo "RESULT=FAIL_ACTION_NOT_FOUND"; echo "시작 경로가 404 입니다. 앱의 경로 접두사와 omniauth 류의 경로 접두사 설정을 확인하세요."; return 1 ;;
+    404) echo "RESULT=FAIL_ACTION_NOT_FOUND"; echo "시작 경로가 404 입니다. 앱의 경로 접두사와 omniauth 류의 경로 접두사 설정을 확인하세요. (참고: Rails omniauth 에서는 시작 경로로 GET 해도 404 가 실측되었다. POST 인지 확인하세요.)"; return 1 ;;
     405) echo "RESULT=FAIL_METHOD_NOT_ALLOWED"; echo "POST 가 허용되지 않습니다. 시작 방식(GET/POST)을 확인하세요."; return 1 ;;
     *) echo "RESULT=FAIL_UNEXPECTED_STATUS"; echo "HTTP ${st2:-없음} 로 응답했습니다(302 기대)."; return 1 ;;
   esac
