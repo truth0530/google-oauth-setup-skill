@@ -2,9 +2,9 @@
 name: google-oauth-setup
 description: Use when the user needs to create or fix a Google OAuth 2.0 web client (Sign in with Google) in Google Cloud Console - choosing/creating a project, configuring the OAuth consent screen and scopes, adding test users, creating the web application client, entering authorized JavaScript origins and redirect URIs, and recording the client ID/secret safely. Also use for redirect_uri_mismatch, invalid_client, access_denied, origin_mismatch errors. 구글 OAuth 클라이언트 만들기, 동의 화면, 리디렉션 URI 등록, 구글 로그인 오류 해결.
 metadata:
-  version: "0.1.0"
+  version: "0.2.0"
   date: "2026-10-08"
-  status: "초안 - 실사용 피드백으로 보강 예정"
+  status: "초안 - 1회 실사용 관찰 반영, 나머지는 피드백으로 보강 예정"
 ---
 
 # google-oauth-setup
@@ -48,30 +48,67 @@ metadata:
    ```bash
    printf '%s' "$CLIENT_SECRET_VALUE" | scripts/write_secrets.sh --file .env.local --key GOOGLE_CLIENT_SECRET
    ```
+   - 에이전트가 파일을 직접 편집했다면 아래 4-1을 반드시 한다(권한이 600 이 아니었던 사례가 있다).
+4-1. **값 노출 없이 확인**: `scripts/check_secrets_file.sh --file .env.local --email-key ADMIN_EMAILS`
+   - 키마다 상태(SET/EMPTY/PLACEHOLDER/MISSING), 길이, 형식 판정, 지문(SHA-256 앞 8자리)만 출력한다. 값은 출력하지 않는다.
+   - 형식 기준(관찰값): 클라이언트 ID 는 숫자로 시작해 하이픈, 문자열, 그 뒤에 구글 고정 도메인 접미사가 붙는 모양. Secret 은 고정 접두사 + 관찰 길이 35자. 구글이 바꾸면 WARN 이 날 수 있다.
+   - 파일 권한이 600 이 아니면 문제로 보고한다. 해결: `chmod 600 <파일>`. git 이 무시하는 파일인지도 확인한다.
+   - 지문은 나중에 "에이전트 세션이 끝난 뒤 파일이 바뀌었는지"를 값 노출 없이 비교하는 데 쓴다.
 5. **형식 점검(네트워크 없음)**: `scripts/check_redirect_uri.sh --lint-only --redirect-uri <URI>`
 6. **등록 점검(비밀 없이)**: `scripts/check_redirect_uri.sh --client-id <공개 ID> --redirect-uri <URI>`
-   - `MISMATCH`: 콘솔 등록값과 코드의 값을 글자 단위로 비교. 저장 직후면 반영 지연 가능
+   - 판정은 구글 응답의 `Location` 경로가 1순위다(실측): 등록된 정확한 URI 는 로그인 화면 경로, 등록되지 않은 URI 는 오류 화면 경로(`/signin/oauth/error`)로 302 된다. 400 본문을 기대하지 않는다.
+   - `REJECTED`: 구글이 조합을 거부. 관찰된 원인은 미등록 redirect_uri(말단 슬래시 추가, 다른 경로). 글자 단위로 비교하고, client_id 가 이 프로젝트 것인지 확인. 저장 직후면 반영 지연 가능
    - `OK_*`: 조합은 받아들여짐. 단, 테스트 사용자 누락 등은 이 점검으로 알 수 없다
-7. **앱에 값 주입 후 실제 로그인 1회 시험**: 허용 계정으로 성공, 허용 목록에 없는 계정으로 거부되는지 확인.
-8. **마무리**: Secret이 어디에도 남지 않았는지(셸 기록, 로그, 채팅) 확인하고, 사용한 프로젝트 이름과 등록한 URI 목록만 보고한다.
+   - `UNKNOWN`: 응답 형태를 모른다(존재하지 않는 client_id 등은 미확인). 추측하지 말고 브라우저로 직접 확인
+7. **앱에 값 주입 후 로그인 시작 스모크 검사**: 앱을 배포/재시작한 뒤
+   ```bash
+   scripts/check_app_login_start.sh --login-url https://app.example.com/login \
+     --action-url https://app.example.com/auth/google_oauth2 \
+     --expected-redirect-uri https://app.example.com/auth/google_oauth2/callback
+   ```
+   - 로그인 페이지에서 세션 쿠키와 CSRF 토큰을 얻고 POST 로 로그인을 시작해, 302 로 구글 인증 주소에 가는지, `redirect_uri` 가 기대 값과 같은지, `client_id` 가 채워졌고 형식이 맞는지(자리표시값 주입 감지), 그 주소를 구글이 로그인 화면으로 받아들이는지 확인한다. 비밀은 필요 없고 `client_id` 값은 출력하지 않는다.
+   - 시작이 GET 이거나 토큰 필드 이름이 다르면 `--token-field`, `--no-csrf` 를 쓴다.
+8. **실제 로그인 1회 시험(사람)**: 허용 계정으로 성공, 허용 목록에 없는 계정으로 거부되는지 확인. 스모크 검사는 이 단계를 대신하지 못한다.
+9. **마무리**: Secret이 어디에도 남지 않았는지(셸 기록, 로그, 채팅) 확인하고, 사용한 프로젝트 이름과 등록한 URI 목록만 보고한다.
 
 ## 검증 상태 (정직하게)
 
-| 항목 | 상태 |
+### 실측 확인됨 (1회 관찰, 2026-10-08)
+
+| 항목 | 내용 |
 |---|---|
-| `scripts/write_secrets.sh` | 시험 통과 (임시 디렉터리). 실제 운영 파일에는 사용자 환경에서 확인 필요 |
-| `scripts/check_redirect_uri.sh` 판정 로직 | **모의 응답으로만 시험**. 실제 구글 응답 문구와 상태 코드로는 검증되지 않음 |
-| 콘솔 메뉴 경로 | 확인 필요 표시 항목은 직접 검증하지 못함 |
-| 오류 코드 표, 범위 분류 | 일반 지식 기반. 공식 문서로 재확인 권장 |
+| 등록 여부 판정 | 쿠키 없이 인증 엔드포인트를 한 번 호출하면 등록된 정확한 URI 는 302 + 로그인 화면 경로, 미등록 URI(말단 슬래시 추가, 다른 경로)는 302 + 오류 화면 경로. `check_redirect_uri.sh` 가 이 기준으로 판정 |
+| 앱의 로그인 시작 흐름 | 로그인 페이지 GET(쿠키+토큰) -> POST 로 시작 -> 302 로 구글 인증 주소, `redirect_uri` 일치, 그 주소는 다시 302 로 로그인 화면. `check_app_login_start.sh` 가 이 흐름을 자동화 |
+| Rails omniauth 계열 | POST + authenticity_token 으로 시작하면 정상 동작, 하위 경로 배포에서 콜백 경로와 `path_prefix` 에 접두사를 맞춰 정상 동작 (GET 시작이 실패한다는 점은 라이브러리 문서 기준이며 직접 시도하지 않아 미확인) (`references/frameworks.md`) |
+| 브라우저 에이전트(Aside CLI) 운용 | 출력 파이프로 CLI 가 먼저 끝나도 세션은 계속 running, 임시 세션은 앱 목록에 안 보임, 진행 내용은 CLI 로 안 보임, 기존 프로젝트 재사용 시도 (`docs/AGENT_BROWSER_NOTES.md`) |
+| 비밀 파일 검증 | 값 대신 길이, 형식, 지문으로 확인 가능. 에이전트가 만든 파일 권한이 600 이 아니었음 |
+| `scripts/write_secrets.sh` | 시험 통과 (임시 디렉터리) |
 
-## 실사용 피드백으로 보강 예정
+위 항목은 모두 1회 관찰이다. 다른 환경에서 다르게 나올 수 있다.
 
-- 확인된 사실: 위 "검증 상태"의 시험 통과 항목뿐이다.
-- 추측(실사용으로 확인 필요): 브라우저 에이전트가 콘솔에서 막히는 지점, 반영 지연 시간, 새 프로젝트 생성 시 조직 정책 제한의 빈도.
-- 기록 방법: `docs/AGENT_BROWSER_NOTES.md`의 "관찰 기록" 표에 날짜, 막힌 단계, 해결 방법을 추가한다.
+### 미확인 (직접 확인하지 못함)
+
+| 항목 | 비고 |
+|---|---|
+| 콘솔 메뉴 경로와 화면 이름 | `확인 필요` 표시. 자동화 에이전트의 세부 진행은 볼 수 없었다 |
+| 에이전트가 새 프로젝트를 실제로 만들었는지 | 결과 파일의 변화만 확인. 프로젝트 목록은 사람이 콘솔에서 확인해야 함 |
+| 존재하지 않는 client_id, 삭제된 클라이언트, 동의 화면 불량 시 응답 형태 | `UNKNOWN` 으로 분류 |
+| 반영 지연 시간, 프로젝트 생성 한도/조직 정책, 테스트 상태 만료와 사용자 한도 | 일반 지식. 공식 문서로 재확인 |
+| 오류 코드 표, 범위 분류, 프레임워크 콜백 표(Rails 외) | 일반 지식 기반 |
+| 이 스킬을 처음 보는 다른 사용자의 막힘 | 관찰 기록에 쌓아야 함 |
+
+## 실사용 피드백
+
+- 확인된 사실은 위 "실측 확인됨" 표와 `docs/AGENT_BROWSER_NOTES.md` 의 관찰 기록 표다.
+- 추측은 "미확인" 표에만 둔다.
+- 기록 방법: 관찰 기록 표에 날짜, 도구, 막힌 단계, 해결 방법, 소요 시간을 추가한다. 확인되지 않은 것은 "미확인"으로 적는다.
 
 ## 참고 파일
 
+- `scripts/check_redirect_uri.sh`: 비밀 없이 URI 형식과 등록 여부 점검 (Location 경로 판정)
+- `scripts/check_app_login_start.sh`: 앱의 로그인 시작 흐름 스모크 검사
+- `scripts/check_secrets_file.sh`: 값 노출 없이 비밀 파일 형식, 권한, 지문 확인
+- `scripts/write_secrets.sh`: 비밀을 출력 없이 지정 키에만 기록
 - `references/frameworks.md`: 프레임워크별 콜백 경로 기본값
 - `references/errors.md`: 오류 코드와 해결표
 - `references/publishing-and-scopes.md`: 테스트/프로덕션 게시 상태, 범위와 앱 검증
